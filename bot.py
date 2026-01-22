@@ -1,6 +1,7 @@
 import os
 import logging
 import requests
+from datetime import datetime, timezone, timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -19,6 +20,9 @@ GOLD_PRICE_API = "https://data-asg.goldprice.org/dbXRates/AED"
 
 # Conversion constants
 GRAMS_PER_OUNCE = 31.1035
+
+# UAE timezone (GMT+4)
+UAE_TIMEZONE = timezone(timedelta(hours=4))
 
 
 def fetch_gold_price_aed() -> dict:
@@ -48,13 +52,17 @@ def fetch_gold_price_aed() -> dict:
         change = item.get("chgXau", 0)
         change_percent = item.get("pcXau", 0)
         
+        # Get current UAE time
+        uae_time = datetime.now(UAE_TIMEZONE)
+        timestamp = uae_time.strftime("%b %d, %Y %I:%M:%S %p UAE")
+        
         prices = {
             "ounce": f"{price_per_ounce:,.2f}",
             "gram": f"{price_per_gram:,.2f}",
             "kilo": f"{price_per_kilo:,.2f}",
             "change": f"{change:+,.2f}",
             "change_percent": f"{change_percent:+.2f}%",
-            "timestamp": data.get("date", "")
+            "timestamp": timestamp
         }
         
         return prices
