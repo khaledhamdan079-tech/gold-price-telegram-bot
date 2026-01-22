@@ -1,7 +1,6 @@
 import os
 import logging
 import requests
-from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -15,55 +14,48 @@ logger = logging.getLogger(__name__)
 # Bot token from environment variable
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
-# Gold price URL for AED
-GOLD_PRICE_URL = "https://goldprice.org/gold-price-united-arab-emirates.html"
+# Gold price API endpoint for AED
+GOLD_PRICE_API = "https://data-asg.goldprice.org/dbXRates/AED"
+
+# Conversion constants
+GRAMS_PER_OUNCE = 31.1035
 
 
 def fetch_gold_price_aed() -> dict:
-    """Fetch current gold prices in AED from goldprice.org"""
+    """Fetch current gold prices in AED from goldprice.org API"""
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
-        response = requests.get(GOLD_PRICE_URL, headers=headers, timeout=15)
+        response = requests.get(GOLD_PRICE_API, headers=headers, timeout=15)
         response.raise_for_status()
         
-        soup = BeautifulSoup(response.text, "html.parser")
+        data = response.json()
         
-        # Find the gold price table
-        prices = {}
+        if "items" not in data or not data["items"]:
+            return {}
         
-        # Look for price per ounce
-        ounce_element = soup.select_one("#gpxtickerLeft_price")
-        if ounce_element:
-            prices["ounce"] = ounce_element.get_text(strip=True)
+        item = data["items"][0]
         
-        # Look for price per gram
-        gram_element = soup.select_one("#gpxtickerLeft_price_gram")
-        if gram_element:
-            prices["gram"] = gram_element.get_text(strip=True)
+        # Get price per ounce
+        price_per_ounce = item.get("xauPrice", 0)
         
-        # Look for price per kilo
-        kilo_element = soup.select_one("#gpxtickerLeft_price_kilo")
-        if kilo_element:
-            prices["kilo"] = kilo_element.get_text(strip=True)
+        # Calculate price per gram and per kilo
+        price_per_gram = price_per_ounce / GRAMS_PER_OUNCE
+        price_per_kilo = price_per_gram * 1000
         
-        # Alternative selectors if the above don't work
-        if not prices:
-            # Try alternative approach - look for specific data attributes or classes
-            price_spans = soup.find_all("span", class_="price")
-            for span in price_spans:
-                text = span.get_text(strip=True)
-                if text and "AED" in text or text.replace(",", "").replace(".", "").isdigit():
-                    if "ounce" not in prices:
-                        prices["ounce"] = text
-                        break
+        # Get change info
+        change = item.get("chgXau", 0)
+        change_percent = item.get("pcXau", 0)
         
-        # If still no prices, try to get from the main price display
-        if not prices:
-            main_price = soup.select_one(".gpxMainPriceValue, .price-value, [data-price]")
-            if main_price:
-                prices["ounce"] = main_price.get_text(strip=True)
+        prices = {
+            "ounce": f"{price_per_ounce:,.2f}",
+            "gram": f"{price_per_gram:,.2f}",
+            "kilo": f"{price_per_kilo:,.2f}",
+            "change": f"{change:+,.2f}",
+            "change_percent": f"{change_percent:+.2f}%",
+            "timestamp": data.get("date", "")
+        }
         
         return prices
         
@@ -116,17 +108,22 @@ async def gold_price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     prices = fetch_gold_price_aed()
     
     if prices:
-        message = "🥇 *Current Gold Prices in AED*\n\n"
+        # Determine trend emoji
+        change_val = float(prices.get('change', '0').replace(',', '').replace('+', ''))
+        trend = "📈" if change_val >= 0 else "📉"
         
-        if "ounce" in prices:
-            message += f"📊 *Per Ounce:* {prices['ounce']} AED\n"
-        if "gram" in prices:
-            message += f"📊 *Per Gram:* {prices['gram']} AED\n"
-        if "kilo" in prices:
-            message += f"📊 *Per Kilo:* {prices['kilo']} AED\n"
+        message = f"🥇 *Current Gold Prices in AED* {trend}\n\n"
+        
+        message += f"💰 *Per Ounce:* {prices['ounce']} AED\n"
+        message += f"💰 *Per Gram:* {prices['gram']} AED\n"
+        message += f"💰 *Per Kilo:* {prices['kilo']} AED\n\n"
+        
+        message += f"📊 *Change:* {prices['change']} AED ({prices['change_percent']})\n"
+        
+        if prices.get('timestamp'):
+            message += f"\n🕐 _{prices['timestamp']}_"
         
         message += "\n_Source: goldprice.org_"
-        message += "\n_Updated in real-time_"
         
         await update.message.reply_text(message, parse_mode="Markdown")
     else:
