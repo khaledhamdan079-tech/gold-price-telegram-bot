@@ -3,7 +3,7 @@ import logging
 import requests
 from datetime import datetime, timezone, timedelta
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 # Configure logging
 logging.basicConfig(
@@ -154,6 +154,10 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("gold", gold_price))
+    
+    # React when "gold" or "دهب" is mentioned in a message (e.g. in groups)
+    gold_word_filter = filters.Regex(r"(?i)\bgold\b|دهب")
+    application.add_handler(MessageHandler(gold_word_filter, gold_price))
     
     # Run the bot
     logger.info("Starting Gold Price Bot...")
