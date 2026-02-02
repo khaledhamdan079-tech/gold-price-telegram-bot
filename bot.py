@@ -86,6 +86,9 @@ I can help you check the current gold prices in AED (UAE Dirham).
 /gold - Get current gold prices in AED
 /help - Show this help message
 
+_In groups:_ say _gold_ or _دهب_ to get prices  
+(Group Privacy must be OFF in @BotFather).
+
 _Data sourced from goldprice.org_
 """
     await update.message.reply_text(welcome_message, parse_mode="Markdown")
@@ -101,10 +104,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 /gold - Get current gold prices in AED
 /help - Show this help message
 
-*About:*
-This bot fetches real-time gold prices from goldprice.org and displays them in UAE Dirham (AED).
-
-_Prices are updated in real-time._
+*In groups:* Say _gold_ or _دهب_ to get prices.  
+⚠️ Turn off *Group Privacy* in @BotFather  
+(My Bots → your bot → Bot Settings → Group Privacy → Turn off)  
+or the bot won't see those messages.
 """
     await update.message.reply_text(help_text, parse_mode="Markdown")
 
@@ -155,9 +158,10 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("gold", gold_price))
     
-    # React when "gold" or "دهب" is mentioned in a message (e.g. in groups)
-    gold_word_filter = filters.Regex(r"(?i)\bgold\b|دهب")
-    application.add_handler(MessageHandler(gold_word_filter, gold_price))
+    # React when "gold" or "دهب" is mentioned (groups: need Group Privacy OFF in BotFather)
+    gold_word = filters.Regex(r"(?i)\bgold\b|دهب")
+    text_not_cmd = filters.TEXT & ~filters.COMMAND
+    application.add_handler(MessageHandler(text_not_cmd & gold_word, gold_price))
     
     # Run the bot
     logger.info("Starting Gold Price Bot...")
